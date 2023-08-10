@@ -13,11 +13,10 @@ import com.xing.fileserver.common.constant.FileStatusEnum;
 import com.xing.fileserver.common.exception.BusinessException;
 import com.xing.fileserver.common.model.PageResultBean;
 import com.xing.fileserver.config.DownloadConfig;
-import com.xing.fileserver.dto.*;
+import com.xing.fileserver.mapper.FileUploadMapper;
 import com.xing.fileserver.pojo.dto.*;
 import com.xing.fileserver.pojo.entity.FileUpload;
-import com.xing.fileserver.mapper.FileUploadMapper;
-import io.minio.ObjectStat;
+import io.minio.StatObjectResponse;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -109,9 +108,9 @@ public class FileUploadService extends ServiceImpl<FileUploadMapper, FileUpload>
         List<FileUpload> fileUploads = fileUploadMapper.selectList(query);
         fileUploads.forEach(item -> {
 
-            ObjectStat stat = minioService.stat(item.getPath());
+            StatObjectResponse stat = minioService.stat(item.getPath());
             if (Objects.nonNull(stat)) {
-                item.setSize(stat.length());
+                item.setSize(stat.size());
             }
             item.setStatus(FileStatusEnum.UPLOADED);
 
@@ -254,7 +253,7 @@ public class FileUploadService extends ServiceImpl<FileUploadMapper, FileUpload>
     }
 
 
-    public UploadPresignedResultDTO getPresigned(String id) {
+    public UploadPresignedResultDTO getPreSignedDownloadUrl(String id) {
         FileUpload fileUpload = fileUploadMapper.selectById(id);
         if (Objects.isNull(fileUpload) || !Objects.equals(fileUpload.getStatus(), FileStatusEnum.UPLOADED)) {
             throw new BusinessException("文件不存在");
@@ -281,7 +280,6 @@ public class FileUploadService extends ServiceImpl<FileUploadMapper, FileUpload>
     }
 
     /**
-     *
      * @param id
      * @param module
      * @param time

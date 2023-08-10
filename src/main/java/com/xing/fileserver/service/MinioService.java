@@ -1,44 +1,42 @@
 package com.xing.fileserver.service;
 
+import cn.hutool.core.date.LocalDateTimeUtil;
 import cn.hutool.core.io.IoUtil;
+import com.google.common.collect.HashMultimap;
+import com.xing.fileserver.common.constant.ResultCode;
 import com.xing.fileserver.common.exception.BusinessException;
 import com.xing.fileserver.config.MinioPropertiesConfig;
+import com.xing.fileserver.pojo.rbo.*;
 import io.minio.*;
 import io.minio.http.Method;
+import io.minio.messages.Part;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
-import javax.annotation.PostConstruct;
 import java.io.InputStream;
-import java.util.Optional;
+import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
+import java.util.*;
+import java.util.concurrent.TimeUnit;
 
 @Slf4j
 @Service
+@RequiredArgsConstructor
 public class MinioService {
+    private final MinioPropertiesConfig minioPropertiesConfig;
 
-    @Autowired
-    private MinioPropertiesConfig config;
-
-    private MinioClient minioClient;
-
-    @PostConstruct
-    public void initClient() {
-        try {
-            this.minioClient = new MinioClient(config.getEndpoint(), config.getUser(), config.getPassword());
-        } catch (Exception e) {
-            log.error(e.getMessage());
-            throw new BusinessException("Minio初始化异常");
-        }
-    }
+    private final CustomMinioClient customMinioClient;
 
     public String getBucket() {
-        String bucket = Optional.ofNullable(config.getBucket()).orElse("default");
+        String bucket = Optional.ofNullable(minioPropertiesConfig.getBucketName()).orElse("default");
         try {
-            boolean isExist = minioClient.bucketExists(bucket);
+            boolean isExist = customMinioClient.bucketExists(BucketExistsArgs.builder()
+                    .bucket(bucket)
+                    .build());
             if (!isExist) {
-                minioClient.makeBucket(bucket);
+                customMinioClient.makeBucket(MakeBucketArgs.builder().bucket(bucket).build());
             }
         } catch (Exception e) {
             log.error(e.getMessage());
@@ -56,7 +54,7 @@ public class MinioService {
     public void save(MultipartFile file, String path) {
         String bucket = getBucket();
         try {
-            minioClient.putObject(PutObjectArgs.builder()
+            customMinioClient.putObject(PutObjectArgs.builder()
                     .bucket(bucket)
                     .object(path)
                     .contentType(file.getContentType())
@@ -77,7 +75,7 @@ public class MinioService {
     public byte[] get(String path) {
         byte[] data = new byte[0];
         try {
-            InputStream is = minioClient.getObject(GetObjectArgs.builder()
+            InputStream is = customMinioClient.getObject(GetObjectArgs.builder()
                     .bucket(getBucket())
                     .object(path)
                     .build());
@@ -97,7 +95,10 @@ public class MinioService {
         String bucket = getBucket();
         for (String path : paths) {
             try {
-                minioClient.removeObject(bucket, path);
+                customMinioClient.removeObject(RemoveObjectArgs.builder()
+                                .bucket(bucket)
+                                .object(path)
+                        .build());
             } catch (Exception e) {
                 log.error("Minio删除{} {}异常", bucket, path, e.getMessage());
             }
@@ -114,12 +115,11 @@ public class MinioService {
         String url = null;
         String bucket = getBucket();
         try {
-            url = minioClient.getPresignedObjectUrl(GetPresignedObjectUrlArgs.builder()
+            url = customMinioClient.getPresignedObjectUrl(GetPresignedObjectUrlArgs.builder()
                     .method(Method.PUT)
                     .bucket(getBucket())
                     .object(path)
-                    .expiry(config.getExpire())
-                    .extraQueryParams()
+                    .expiry(minioPropertiesConfig.getExpirySecond())
                     .build());
         } catch (Exception e) {
             log.error("Minio put  {} 预签异常", path);
@@ -137,12 +137,12 @@ public class MinioService {
     public String getPreSignedDownloadUrl(String path) {
         String url = null;
         try {
-            url = minioClient.getPresignedObjectUrl(GetPresignedObjectUrlArgs.builder()
-                            .method(Method.GET)
-                            .bucket(getBucket())
-                            .object(path)
-                            .expiry(config.getExpire())
-                            .extraQueryParams()
+            url = customMinioClient.getPresignedObjectUrl(GetPresignedObjectUrlArgs.builder()
+                    .method(Method.GET)
+                    .bucket(getBucket())
+                    .object(path)
+                    .expiry(minioPropertiesConfig.getExpirySecond())
+                    //.extraQueryParams()
                     .build());
         } catch (Exception e) {
             log.error("Minio put  {} 预签异常", path);
@@ -163,7 +163,10 @@ public class MinioService {
         StatObjectResponse objectStat = null;
 
         try {
-            objectStat = minioClient.statObject(bucket, path);
+            objectStat = customMinioClient.statObject(StatObjectArgs.builder()
+                            .bucket(bucket)
+                            .object(path)
+                    .build());
         } catch (Exception e) {
             log.error("Minio stat  {} 异常", path);
         }
@@ -171,8 +174,115 @@ public class MinioService {
         return objectStat;
     }
 
-    public void createMultipartUpload(String path, Integer chunkSize) {
-        minioClient.
+
+    /**
+     * 创建分片上传地址
+     *
+     * @return
+     */
+    public MultipartUploadCreateResponse createMultipartUpload(MultipartUploadCreateRequest request) {
+        MultipartUploadCreateResponse response = new MultipartUploadCreateResponse();
+        List<MultipartUploadCreateResponse.UploadCreateItem> chunks = new ArrayList<>();
+        HashMultimap<String, String> headers = HashMultimap.create();
+        headers.put("Content-Type", request.getContentType());
+
+        String uploadId = "";
+        try {
+            // 获取 uploadId
+            uploadId = customMinioClient.getUploadId(minioPropertiesConfig.getBucketName(),
+                    null,
+                    request.getObjectName(),
+                    headers,
+                    null);
+            Map<String, String> paramsMap = new HashMap<>(2);
+            paramsMap.put("uploadId", uploadId);
+            for (int i = 1; i <= request.getChunkSize(); i++) {
+                paramsMap.put("partNumber", String.valueOf(i));
+                // 获取上传 url
+                String uploadUrl = customMinioClient.getPresignedObjectUrl(GetPresignedObjectUrlArgs.builder()
+                        // 注意此处指定请求方法为 PUT，前端需对应，否则会报 `SignatureDoesNotMatch` 错误
+                        .method(Method.PUT)
+                        .bucket(minioPropertiesConfig.getBucketName())
+                        .object(request.getObjectName())
+                        // 指定上传连接有效期
+                        .expiry(minioPropertiesConfig.getExpirySecond(), TimeUnit.SECONDS)
+                        .extraQueryParams(paramsMap).build());
+                MultipartUploadCreateResponse.UploadCreateItem item = new MultipartUploadCreateResponse.UploadCreateItem();
+                item.setUploadUrl(uploadUrl);
+                item.setPartNumber(i);
+                chunks.add(item);
+            }
+        } catch (Exception e) {
+            log.error("initMultiPartUpload Error:" + e);
+            return null;
+        }
+        // 过期时间
+        LocalDateTime expireTime = LocalDateTimeUtil.offset(LocalDateTime.now(), minioPropertiesConfig.getExpirySecond(), ChronoUnit.SECONDS);
+        response.setUploadId(uploadId);
+        response.setChunks(chunks);
+        response.setExpiryTime(expireTime);
+        return response;
     }
+
+
+    /**
+     * 上传后合并分片合并
+     *
+     * @param uploadRequest
+     */
+    public FileUploadResponse completeMultipartUpload(CompleteMultipartUploadRequest uploadRequest) {
+        log.info("文件合并开始, uploadRequest: [{}]", uploadRequest);
+        try {
+            final ListPartsResponse listMultipart = listMultipart(MultipartUploadCreate.builder()
+                    .bucketName(minioPropertiesConfig.getBucketName())
+                    .objectName(uploadRequest.getObjectName())
+                    .maxParts(uploadRequest.getChunkSize() + 10)
+                    .uploadId(uploadRequest.getUploadId())
+                    .partNumberMarker(0)
+                    .build());
+            final ObjectWriteResponse objectWriteResponse = completeMultipartUpload(MultipartUploadCreate.builder()
+                    .bucketName(minioPropertiesConfig.getBucketName())
+                    .uploadId(uploadRequest.getUploadId())
+                    .objectName(uploadRequest.getObjectName())
+                    .parts(listMultipart.result().partList().toArray(new Part[]{}))
+                    .build());
+
+            return FileUploadResponse.builder()
+                    //.url(minioPropertiesConfig.getDownloadUri() + "/" + minioPropertiesConfig.getBucketName() + "/" + uploadRequest.getObjectName())
+                    .build();
+        } catch (Exception e) {
+            log.error("合并分片失败", e);
+        }
+        log.info("文件合并结束, uploadRequest: [{}]", uploadRequest);
+        return null;
+    }
+
+
+    /**
+     * 合并上传分片
+     *
+     * @param multipartUploadCreate
+     * @return
+     */
+    public ObjectWriteResponse completeMultipartUpload(MultipartUploadCreate multipartUploadCreate) {
+        try {
+            return customMinioClient.completeMultipartUpload(multipartUploadCreate.getBucketName(), multipartUploadCreate.getRegion(),
+                    multipartUploadCreate.getObjectName(), multipartUploadCreate.getUploadId(), multipartUploadCreate.getParts(),
+                    multipartUploadCreate.getHeaders(), multipartUploadCreate.getExtraQueryParams());
+        } catch (Exception e) {
+            log.error("合并分片失败", e);
+            throw BusinessException.newBusinessException(ResultCode.KNOWN_ERROR.getCode(), e.getMessage());
+        }
+    }
+
+    public ListPartsResponse listMultipart(MultipartUploadCreate multipartUploadCreate) {
+        try {
+            return customMinioClient.listMultipart(multipartUploadCreate.getBucketName(), multipartUploadCreate.getRegion(), multipartUploadCreate.getObjectName(), multipartUploadCreate.getMaxParts(), multipartUploadCreate.getPartNumberMarker(), multipartUploadCreate.getUploadId(), multipartUploadCreate.getHeaders(), multipartUploadCreate.getExtraQueryParams());
+        } catch (Exception e) {
+            log.error("查询分片失败", e);
+            throw BusinessException.newBusinessException(ResultCode.KNOWN_ERROR.getCode(), e.getMessage());
+        }
+    }
+
 
 }

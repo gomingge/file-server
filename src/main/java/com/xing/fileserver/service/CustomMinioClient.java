@@ -71,7 +71,8 @@ public class CustomMinioClient extends MinioClient {
      * @throws InvalidResponseException
      * @throws InternalException
      */
-    public ObjectWriteResponse mergeMultipart(String bucketName, String region, String objectName, String uploadId,
+    @Override
+    public ObjectWriteResponse completeMultipartUpload(String bucketName, String region, String objectName, String uploadId,
                                               Part[] parts, Multimap<String, String> extraHeaders, Multimap<String, String> extraQueryParams)
             throws ServerException, InsufficientDataException, ErrorResponseException, NoSuchAlgorithmException, IOException, InvalidKeyException, XmlParserException, InvalidResponseException, InternalException {
         return this.completeMultipartUpload(bucketName, region, objectName, uploadId, parts, extraHeaders, extraQueryParams);

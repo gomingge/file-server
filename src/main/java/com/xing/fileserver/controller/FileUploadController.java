@@ -2,12 +2,11 @@ package com.xing.fileserver.controller;
 
 import cn.hutool.core.bean.BeanUtil;
 import com.xing.fileserver.common.model.PageResultBean;
-import com.xing.fileserver.dto.*;
 import com.xing.fileserver.pojo.dto.*;
-import com.xing.fileserver.service.FileUploadService;
 import com.xing.fileserver.pojo.vo.UploadPresignedVO;
 import com.xing.fileserver.pojo.vo.UploadVO;
 import com.xing.fileserver.pojo.vo.UploadedFileVO;
+import com.xing.fileserver.service.FileUploadService;
 import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -110,7 +109,7 @@ public class FileUploadController {
     @ApiOperation("获取预签url")
     @GetMapping("presigned/{id}")
     public UploadPresignedVO getPresignedUrl(@PathVariable String id) {
-        UploadPresignedResultDTO uploadPresignedResultDTO = fileUploadService.getPresigned(id);
+        UploadPresignedResultDTO uploadPresignedResultDTO = fileUploadService.getPreSignedDownloadUrl(id);
         UploadPresignedVO uploadPresignedVO = BeanUtil.toBean(uploadPresignedResultDTO, UploadPresignedVO.class);
         return uploadPresignedVO;
     }

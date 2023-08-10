@@ -1,4 +1,4 @@
-package com.xing.fileserver.dto;
+package com.xing.fileserver.pojo.dto;
 
 import lombok.Data;
 

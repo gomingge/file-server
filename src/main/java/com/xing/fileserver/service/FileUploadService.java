@@ -14,7 +14,8 @@ import com.xing.fileserver.common.exception.BusinessException;
 import com.xing.fileserver.common.model.PageResultBean;
 import com.xing.fileserver.config.DownloadConfig;
 import com.xing.fileserver.dto.*;
-import com.xing.fileserver.entity.FileUpload;
+import com.xing.fileserver.pojo.dto.*;
+import com.xing.fileserver.pojo.entity.FileUpload;
 import com.xing.fileserver.mapper.FileUploadMapper;
 import io.minio.ObjectStat;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -75,11 +76,11 @@ public class FileUploadService extends ServiceImpl<FileUploadMapper, FileUpload>
 
         LocalDateTime now = LocalDateTime.now();
         String id = UUID.randomUUID().toString();
-        String filename = dto.getName();
+        String filename = dto.getFileName();
         String ext = FileUtil.extName(filename);
         String path = buildPath(id, dto.getModule(), now, filename);
 
-        String presignedUrl = minioService.presignedPut(path);
+        String presignedUrl = minioService.getPreSignedUploadUrl(path);
 
         FileUpload fileUpload = new FileUpload();
         String url = String.format("%s/%s", downloadConfig.getApi(), id);
@@ -96,7 +97,7 @@ public class FileUploadService extends ServiceImpl<FileUploadMapper, FileUpload>
         UploadPresignedResultDTO presignedDTO = new UploadPresignedResultDTO();
         presignedDTO.setId(id);
         presignedDTO.setUrl(presignedUrl);
-        presignedDTO.setName(dto.getName());
+        presignedDTO.setName(dto.getFileName());
 
         return presignedDTO;
     }
@@ -259,7 +260,7 @@ public class FileUploadService extends ServiceImpl<FileUploadMapper, FileUpload>
             throw new BusinessException("文件不存在");
         }
         String path = fileUpload.getPath();
-        String presignedUrl = minioService.presignedGet(path);
+        String presignedUrl = minioService.getPreSignedDownloadUrl(path);
 
         UploadPresignedResultDTO presignedDTO = new UploadPresignedResultDTO();
         presignedDTO.setId(id);
@@ -273,13 +274,20 @@ public class FileUploadService extends ServiceImpl<FileUploadMapper, FileUpload>
             return fileUpload;
         }
 
-        String presignedUrl = minioService.presignedGet(fileUpload.getPath());
+        String presignedUrl = minioService.getPreSignedDownloadUrl(fileUpload.getPath());
         fileUpload.setUrl(presignedUrl);
 
         return fileUpload;
     }
 
-
+    /**
+     *
+     * @param id
+     * @param module
+     * @param time
+     * @param filename
+     * @return 模块/年/月/日/uuid/文件名.后缀
+     */
     private String buildPath(String id, String module, LocalDateTime time, String filename) {
         String ext = FileUtil.extName(filename);
         // module/2021/08/14/id.ext

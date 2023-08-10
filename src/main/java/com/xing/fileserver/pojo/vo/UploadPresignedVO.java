@@ -1,4 +1,4 @@
-package com.xing.fileserver.vo;
+package com.xing.fileserver.pojo.vo;
 
 import lombok.Data;
 

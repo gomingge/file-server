@@ -2,10 +2,9 @@ package com.xing.fileserver.service;
 
 import cn.hutool.core.io.IoUtil;
 import com.xing.fileserver.common.exception.BusinessException;
-import com.xing.fileserver.config.MinioConfig;
-import io.minio.MinioClient;
-import io.minio.ObjectStat;
-import io.minio.PutObjectOptions;
+import com.xing.fileserver.config.MinioPropertiesConfig;
+import io.minio.*;
+import io.minio.http.Method;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -20,7 +19,7 @@ import java.util.Optional;
 public class MinioService {
 
     @Autowired
-    private MinioConfig config;
+    private MinioPropertiesConfig config;
 
     private MinioClient minioClient;
 
@@ -48,24 +47,40 @@ public class MinioService {
         return bucket;
     }
 
+    /**
+     * 直接上传
+     *
+     * @param file
+     * @param path
+     */
     public void save(MultipartFile file, String path) {
         String bucket = getBucket();
         try {
-            InputStream inputStream = file.getInputStream();
-            long size = file.getSize();
-            PutObjectOptions putObjectOptions = new PutObjectOptions(size, -1);
-            putObjectOptions.setContentType(file.getContentType());
-            minioClient.putObject(bucket, path, inputStream, putObjectOptions);
+            minioClient.putObject(PutObjectArgs.builder()
+                    .bucket(bucket)
+                    .object(path)
+                    .contentType(file.getContentType())
+                    .stream(file.getInputStream(), file.getSize(), -1)
+                    .build());
         } catch (Exception e) {
             log.error(e.getMessage());
             throw new BusinessException("Minio保存异常");
         }
     }
 
+    /**
+     * 直接下载
+     *
+     * @param path
+     * @return
+     */
     public byte[] get(String path) {
         byte[] data = new byte[0];
         try {
-            InputStream is = minioClient.getObject(getBucket(), path);
+            InputStream is = minioClient.getObject(GetObjectArgs.builder()
+                    .bucket(getBucket())
+                    .object(path)
+                    .build());
             data = IoUtil.readBytes(is);
         } catch (Exception e) {
             log.error(e.getMessage());
@@ -89,11 +104,23 @@ public class MinioService {
         }
     }
 
-    public String presignedPut(String path) {
+    /**
+     * 获取预签名上传地址
+     *
+     * @param path
+     * @return
+     */
+    public String getPreSignedUploadUrl(String path) {
         String url = null;
         String bucket = getBucket();
         try {
-            url = minioClient.presignedPutObject(bucket, path, config.getExpire());
+            url = minioClient.getPresignedObjectUrl(GetPresignedObjectUrlArgs.builder()
+                    .method(Method.PUT)
+                    .bucket(getBucket())
+                    .object(path)
+                    .expiry(config.getExpire())
+                    .extraQueryParams()
+                    .build());
         } catch (Exception e) {
             log.error("Minio put  {} 预签异常", path);
             throw new BusinessException("Minio保存异常");
@@ -101,11 +128,22 @@ public class MinioService {
         return url;
     }
 
-    public String presignedGet(String path) {
+    /**
+     * 获取预签名下载url
+     *
+     * @param path 文件oss上保存路径
+     * @return
+     */
+    public String getPreSignedDownloadUrl(String path) {
         String url = null;
-        String bucket = getBucket();
         try {
-            url = minioClient.presignedGetObject(bucket, path, config.getExpire());
+            url = minioClient.getPresignedObjectUrl(GetPresignedObjectUrlArgs.builder()
+                            .method(Method.GET)
+                            .bucket(getBucket())
+                            .object(path)
+                            .expiry(config.getExpire())
+                            .extraQueryParams()
+                    .build());
         } catch (Exception e) {
             log.error("Minio put  {} 预签异常", path);
             throw new BusinessException("Minio保存异常");
@@ -114,9 +152,15 @@ public class MinioService {
         return url;
     }
 
-    public ObjectStat stat(String path) {
+    /**
+     * 获取对象信息和元数据
+     *
+     * @param path
+     * @return
+     */
+    public StatObjectResponse stat(String path) {
         String bucket = getBucket();
-        ObjectStat objectStat = null;
+        StatObjectResponse objectStat = null;
 
         try {
             objectStat = minioClient.statObject(bucket, path);
@@ -125,6 +169,10 @@ public class MinioService {
         }
 
         return objectStat;
+    }
+
+    public void createMultipartUpload(String path, Integer chunkSize) {
+        minioClient.
     }
 
 }

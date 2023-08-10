@@ -1,4 +1,4 @@
-package com.xing.fileserver.dto;
+package com.xing.fileserver.pojo.dto;
 
 import com.xing.fileserver.common.constant.FileStatusEnum;
 import com.xing.fileserver.common.model.PageDTO;

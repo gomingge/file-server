@@ -1,4 +1,4 @@
-package com.xing.fileserver.vo;
+package com.xing.fileserver.pojo.vo;
 
 import com.fasterxml.jackson.databind.annotation.JsonSerialize;
 import com.xing.fileserver.common.serializer.FillUrlSerializer;

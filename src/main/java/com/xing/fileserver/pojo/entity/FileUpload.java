@@ -1,4 +1,4 @@
-package com.xing.fileserver.entity;
+package com.xing.fileserver.pojo.entity;
 
 import com.baomidou.mybatisplus.annotation.TableName;
 import com.xing.fileserver.common.constant.FileStatusEnum;

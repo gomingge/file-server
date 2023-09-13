@@ -7,27 +7,28 @@ import io.minio.MinioClient;
 import io.minio.ObjectStat;
 import io.minio.PutObjectOptions;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.DisposableBean;
+import org.springframework.beans.factory.InitializingBean;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
-import javax.annotation.PostConstruct;
 import java.io.InputStream;
 import java.util.Optional;
 
 @Slf4j
 @Service
-public class MinioService {
+public class MinioService implements InitializingBean {
 
     @Autowired
     private MinioConfig config;
 
     private MinioClient minioClient;
 
-    @PostConstruct
-    public void initClient() {
+    @Override
+    public void afterPropertiesSet() {
         try {
-            this.minioClient = new MinioClient(config.getEndpoint(), config.getUser(), config.getPassword());
+            this.minioClient = new MinioClient(config.getEndpoint(),config.getPort(), config.getUser(), config.getPassword());
         } catch (Exception e) {
             log.error(e.getMessage());
             throw new BusinessException("Minio初始化异常");

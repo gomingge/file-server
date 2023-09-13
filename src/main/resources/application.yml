@@ -44,3 +44,7 @@ download:
   host: http://localhost:9090
   # 下载文件的api接口
   api: files/download
+
+# swagger 指定接口包扫描
+springdoc:
+  packagesToScan: com.xing.fileserver.controller

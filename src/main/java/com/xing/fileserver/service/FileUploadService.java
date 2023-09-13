@@ -17,12 +17,12 @@ import com.xing.fileserver.dto.*;
 import com.xing.fileserver.entity.FileUpload;
 import com.xing.fileserver.mapper.FileUploadMapper;
 import io.minio.ObjectStat;
+import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
-import javax.servlet.http.HttpServletResponse;
 import java.time.LocalDateTime;
 import java.util.*;
 

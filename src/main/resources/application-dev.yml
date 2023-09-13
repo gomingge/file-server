@@ -1,16 +1,17 @@
 # 数据库配置
 db:
-  host: localhost
+  host: 192.168.41.4
   port: 3306
   name: file_server
   user: root
-  password: root
+  password: muming996211478
 
 # minio
 minio:
-  endpoint: http://localhost
-  user: minio
-  password: minio123
+  endpoint: http://192.168.41.4
+  port: 9002
+  user: minio_zKyQZQ
+  password: minio_JJPmSA
   bucket: file-server-dev
 
 # 业务

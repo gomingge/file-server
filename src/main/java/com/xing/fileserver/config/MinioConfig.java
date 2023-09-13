@@ -11,6 +11,8 @@ public class MinioConfig {
 
     private String endpoint;
 
+    private int port;
+
     private String user;
 
     private String password;
